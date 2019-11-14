@@ -1,6 +1,6 @@
 {
   "name": "auto-generate-redux-store-file",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "repository": "https://github.com/tungnt620/auto-generate-redux-store-file.git",
   "author": {
     "name": "Tung Nguyen",
