@@ -37,7 +37,6 @@
     "glob": "^7.1.2",
     "inquirer": "^3.0.6",
     "inquirer-autocomplete-prompt": "^0.8.0",
-    "list-react-files": "^0.2.0",
     "lodash": "^4.17.4",
     "meow": "^3.7.0",
     "ora": "^1.2.0"

@@ -1,96 +1,90 @@
 import { basename, dirname, isAbsolute, join, relative } from 'path'
-import { camelCase, upperFirst } from 'lodash'
-import { gray } from 'chalk'
+import { gray, red } from 'chalk'
 import glob from 'glob'
-import listReactFiles from 'list-react-files'
+import { upperFirst, camelCase, lowerCase, upperCase } from 'lodash'
+
+const { readdirSync } = require('fs')
 import { copy, move, readFileSync, writeFileSync } from 'fs-extra'
 
-const removeExt = path => path.replace(/\.[^.]+$/, '')
-
-export const getComponentName = (path) => (
-  path.split('/').reduce((name, part) => {
-    if (/^[A-Z]/.test(part)) {
-      return removeExt(part)
-    } else if (/^((?!index).+)\.[^.]+$/.test(part)) {
-      return upperFirst(camelCase(removeExt(part)))
-    }
-    return name
-  }, '')
-)
-
-export const getComponentFolder = (path) => {
-  const name = getComponentName(path)
-  return dirname(path).split('/').reduce((folder, part) => {
-    if (removeExt(part) === name) {
-      return folder
-    }
-    return join(folder, part)
-  }, './')
+export const getStoreName = (path) => {
+  const parts = path.split('/')
+  return parts[parts.length - 1]
 }
 
-export const isSingleFile = (path) => {
-  const name = getComponentName(path)
-  const [dir] = dirname(path).split('/').reverse()
-
-  return dir !== name
+export const getStoreFolder = (path) => {
+  const parts = path.split('/')
+  parts.pop()
+  return './' + parts.join('/')
 }
 
-export const getFiles = (cwd, componentName) => {
+export const getFiles = (cwd, dirName) => {
   const extensions = '{js,ts,jsx,tsx,css,less,scss,sass,sss,json,md,mdx}'
-  const pattern = componentName ? `**/${componentName}{.,.*.}${extensions}` : `**/*.${extensions}`
+  const pattern = dirName ? `**/${dirName}{.,.*.}${extensions}` : `**/*.${extensions}`
+
+  console.log(pattern)
+
   return glob.sync(pattern, { cwd, absolute: true, nodir: true })
 }
 
-export const getComponentFiles = (root, workingDir = process.cwd()) => (
-  listReactFiles(root).then((files) =>
-    files.map((path) => {
-      const name = getComponentName(path)
-      const absolutePath = join(root, path)
-      const relativePath = relative(workingDir, absolutePath)
-      return {
-        name: `${name} ${gray(relativePath)}`,
-        short: name,
-        value: absolutePath,
-      }
-    })
-  )
-)
+const isSubStore = (root, dirName) => {
+  const absolutePath = join(root, dirName)
+  return readdirSync(absolutePath, { withFileTypes: true }).some(dirent => dirent.isFile())
+}
 
-export const replaceContents = (contents, oldName, newName) => contents.replace(
-  new RegExp(`([^a-zA-Z0-9_$])${oldName}([^a-zA-Z0-9_$]|Container)|(['|"]./[a-zA-Z0-9_$]*?)${oldName}([a-zA-Z0-9_$]*?)`, 'g'),
-  `$1$3${newName}$2$4`
-)
+export const getReduxStoreDirectories = (root, workingDir = process.cwd()) => {
+  const subStoreDirs = []
+
+  function getAllSubStore (rootPath) {
+    readdirSync(rootPath, { withFileTypes: true })
+      .filter(dirent => dirent.isDirectory())
+      .forEach(dirent => {
+        const dirName = dirent.name
+        if (isSubStore(rootPath, dirName)) {
+          const absolutePath = join(rootPath, dirName)
+          const relativePath = relative(workingDir, absolutePath)
+
+          subStoreDirs.push({
+            name: `${dirName} ${gray(relativePath)}`,
+            short: dirName,
+            value: absolutePath,
+          })
+        } else {
+          getAllSubStore(join(rootPath, dirName))
+        }
+      })
+  }
+
+  getAllSubStore(root)
+
+  return subStoreDirs
+}
+
+export const replaceContents = (contents, oldName, newName) => {
+  contents = contents.replace(new RegExp(oldName, 'g'), newName)
+  contents = contents.replace(new RegExp(upperCase(oldName).replace(' ', '_'), 'g'), upperCase(newName.replace(' ', '_')))
+  contents = contents.replace(new RegExp(lowerCase(oldName).replace(' ', '_'), 'g'), lowerCase(newName.replace(' ', '_')))
+  contents = contents.replace(new RegExp(upperFirst(oldName), 'g'), upperFirst(newName))
+
+  return contents
+}
 
 export const replicate = async (originalPath, answers, workingDir = process.cwd()) => {
-  const originalName = getComponentName(originalPath)
+  const originalName = getStoreName(originalPath)
   const absolutePath = isAbsolute(originalPath) ? originalPath : join(workingDir, originalPath)
 
-  const promises = []
+  const destinationPath = join(workingDir, answers.folder, answers.name)
 
-  if (isSingleFile(originalPath)) {
-    const files = getFiles(dirname(absolutePath), originalName)
-
-    files.forEach(async (file) => {
-      const filename = basename(file).replace(originalName, answers.name)
-      const destinationPath = join(workingDir, answers.folder, filename)
-      const promise = copy(file, destinationPath).then(() => {
-        const contents = readFileSync(destinationPath).toString()
-        writeFileSync(destinationPath, replaceContents(contents, originalName, answers.name))
-      })
-      promises.push(promise)
-    })
-  } else {
-    const destinationPath = join(workingDir, answers.folder, answers.name)
-    await copy(dirname(absolutePath), destinationPath)
-    const files = getFiles(destinationPath)
-
-    files.forEach((file) => {
-      const contents = readFileSync(file).toString()
-      const renamedPath = join(dirname(file), basename(file).replace(originalName, answers.name))
-      writeFileSync(file, replaceContents(contents, originalName, answers.name))
-      const promise = move(file, renamedPath)
-      promises.push(promise)
-    })
+  if (destinationPath === absolutePath) {
+    console.log(red.bold(`${answers.name} already exists at ${answers.folder}`))
+    return process.exit(1)
   }
-  await Promise.all(promises)
+
+  await copy(absolutePath, destinationPath)
+  const files = getFiles(destinationPath)
+
+  files.forEach((file) => {
+    const contents = readFileSync(file).toString()
+
+    writeFileSync(file, replaceContents(contents, originalName, answers.name))
+  })
 }
