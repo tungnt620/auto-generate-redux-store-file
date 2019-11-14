@@ -1,10 +1,10 @@
-import { basename, dirname, isAbsolute, join, relative } from 'path'
+import { isAbsolute, join, relative } from 'path'
 import { gray, red } from 'chalk'
 import glob from 'glob'
-import { upperFirst, camelCase, lowerCase, upperCase } from 'lodash'
+import { upperFirst, lowerCase, upperCase } from 'lodash'
 
 const { readdirSync } = require('fs')
-import { copy, move, readFileSync, writeFileSync } from 'fs-extra'
+import { copy, readFileSync, writeFileSync } from 'fs-extra'
 
 export const getStoreName = (path) => {
   const parts = path.split('/')
@@ -20,8 +20,6 @@ export const getStoreFolder = (path) => {
 export const getFiles = (cwd, dirName) => {
   const extensions = '{js,ts,jsx,tsx,css,less,scss,sass,sss,json,md,mdx}'
   const pattern = dirName ? `**/${dirName}{.,.*.}${extensions}` : `**/*.${extensions}`
-
-  console.log(pattern)
 
   return glob.sync(pattern, { cwd, absolute: true, nodir: true })
 }
@@ -61,8 +59,8 @@ export const getReduxStoreDirectories = (root, workingDir = process.cwd()) => {
 
 export const replaceContents = (contents, oldName, newName) => {
   contents = contents.replace(new RegExp(oldName, 'g'), newName)
-  contents = contents.replace(new RegExp(upperCase(oldName).replace(' ', '_'), 'g'), upperCase(newName.replace(' ', '_')))
-  contents = contents.replace(new RegExp(lowerCase(oldName).replace(' ', '_'), 'g'), lowerCase(newName.replace(' ', '_')))
+  contents = contents.replace(new RegExp(upperCase(oldName).replace(' ', '_'), 'g'), upperCase(newName).replace(' ', '_'))
+  contents = contents.replace(new RegExp(lowerCase(oldName).replace(' ', '_'), 'g'), lowerCase(newName).replace(' ', '_'))
   contents = contents.replace(new RegExp(upperFirst(oldName), 'g'), upperFirst(newName))
 
   return contents
